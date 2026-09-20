@@ -4,25 +4,27 @@
 
 ### GPU alloué
 
-Le GPU qui m'a été alloué est un **NVIDIA L4**.
+Lors de l'allocation interactive d'un nœud GPU avec SLURM, le GPU mis à disposition était un **NVIDIA L4**.
 
 ### Annulation du job interactif
 
-J'ai lancé un job interactif avec SLURM afin d'accéder à un nœud de calcul équipé d'un GPU.
+Le job interactif avait l'identifiant **2015**.
 
-Le job avait pour identifiant `2015`.
-
-La commande utilisée pour l'annuler est :
+Il a été annulé avec la commande :
 
 ```bash
 scancel 2015
 ```
 
-Après l'annulation, le job est passé par l'état `CG` (`COMPLETING`) avant de disparaître de la file d'attente.
+La commande suivante permet ensuite de vérifier qu'il n'apparaît plus dans la file d'attente :
+
+```bash
+squeue -u $USER
+```
 
 ### Job batch `hello.sh`
 
-J'ai créé un script batch `hello.sh` contenant les directives SLURM nécessaires pour demander un GPU, un CPU et 8 Go de mémoire :
+Le script `hello.sh` utilisé pour soumettre un job batch est :
 
 ```bash
 #!/bin/bash
@@ -35,187 +37,139 @@ J'ai créé un script batch `hello.sh` contenant les directives SLURM nécessair
 #SBATCH -o logs/%x-%j.out
 #SBATCH -e logs/%x-%j.err
 
-set -euo pipefail
-mkdir -p logs
-
-echo "Job $SLURM_JOB_ID on $SLURM_NODELIST"
-nvidia-smi || echo "nvidia-smi indisponible"
-echo "Bonjour depuis SLURM !"
+hostname
+nvidia-smi
 ```
 
-Le script a été soumis avec la commande :
+Le job a été soumis avec :
 
 ```bash
-sbatch hello.sh
+sbatch scripts/hello.sh
 ```
 
-Le job obtenu avait pour identifiant `2059`.
+Le job obtenu avait l'identifiant **2059**.
 
-Le fichier de sortie généré est :
+Après son exécution, son état a été vérifié avec `sacct`. Le job était dans l'état :
 
 ```text
-logs/hello-slurm-2059.out
+COMPLETED
 ```
 
-Le job a été exécuté sur le nœud :
-
-```text
-starfighter-slurm-node-06-1
-```
-
-Le fichier de sortie indique que le GPU utilisé était un **NVIDIA L4**.
+Cela signifie que son exécution s'est terminée correctement.
 
 ### Informations sur l'utilisation des ressources
 
-J'ai utilisé la commande suivante pour consulter les informations du job :
+La commande `sacct` permet d'obtenir des informations sur les ressources demandées et réellement utilisées par un job.
 
-```bash
-sacct -j 2059 --format=JobID,State,Elapsed,MaxRSS,ReqMem,ReqCPUS
-```
+Deux informations importantes sont notamment :
 
-Le résultat principal était :
+- `ReqMem` : quantité de mémoire demandée lors de la soumission du job ;
+- `MaxRSS` : quantité maximale de mémoire physique réellement utilisée par le processus.
 
-```text
-JobID             State    Elapsed     MaxRSS     ReqMem  ReqCPUS
------------- ---------- ---------- -------- -------- --------
-2059          COMPLETED   00:00:01                    8G        1
-2059.batch    COMPLETED   00:00:01     17984K                   1
-2059.extern    COMPLETED   00:00:02                              1
-```
-
-`ReqMem` correspond à la quantité de mémoire RAM demandée à SLURM lors de la soumission du job. Dans mon cas, j'ai demandé **8 Go** avec l'option :
+Dans notre cas, la mémoire demandée dans le script était :
 
 ```bash
 #SBATCH --mem=8G
 ```
 
-`MaxRSS` correspond à la quantité maximale de mémoire RAM réellement utilisée par le job pendant son exécution.
+soit **8 Go de mémoire**.
 
-Pour le job `2059.batch`, `MaxRSS` était de `17984K`, soit environ **18 Mo**.
-
-Ainsi, `ReqMem` représente la mémoire demandée/réservée pour le job, tandis que `MaxRSS` indique la quantité maximale de mémoire effectivement utilisée pendant son exécution.
+`ReqMem` représente donc la réservation effectuée auprès de SLURM, tandis que `MaxRSS` permet d'observer la consommation réelle maximale du programme. Cette comparaison permet d'adapter les futures demandes de ressources et d'éviter de réserver inutilement trop de mémoire.
 
 ## 2. Création d'un environnement virtuel Python
 
 ### Installation de Miniforge
 
-J'ai installé Miniforge afin de disposer de l'outil `mamba` pour gérer les environnements Python.
-
-L'installation a été réalisée sur le cluster dans le répertoire :
+Miniforge a été installé dans le répertoire :
 
 ```text
 /mnt/hdd/homes/iabid/miniforge3
 ```
 
-La version de `mamba` utilisée est :
+Le gestionnaire de paquets `mamba` est disponible dans cette installation.
+
+La version utilisée est :
 
 ```text
-2.9.0
+mamba 2.9.0
 ```
 
 ### Création de l'environnement
 
-J'ai créé un environnement virtuel nommé `deeplearning` avec Python 3.10 :
+Un environnement virtuel nommé `deeplearning` a été créé pour le TP.
 
-```bash
-mamba create -n deeplearning python=3.10
-```
-
-Après activation de l'environnement, j'ai vérifié la version de Python ainsi que le chemin vers l'interpréteur :
-
-```bash
-python --version
-which python
-```
-
-Résultat :
+Il utilise :
 
 ```text
 Python 3.10.21
-/mnt/hdd/homes/iabid/miniforge3/envs/deeplearning/bin/python
 ```
+
+L'environnement peut être activé avec :
+
+```bash
+source /mnt/hdd/homes/iabid/miniforge3/etc/profile.d/conda.sh
+conda activate deeplearning
+```
+
+L'utilisation d'un environnement virtuel permet d'isoler les dépendances nécessaires au projet et d'éviter les conflits avec les autres installations Python disponibles sur le système.
 
 ### Installation de PyTorch avec CUDA
 
-L'installation Conda initiale de PyTorch ne permettait pas d'obtenir le build GPU CUDA 12.1 souhaité avec Python 3.10. J'ai donc utilisé les wheels officielles de PyTorch avec CUDA 12.1 :
+PyTorch a été installé avec les bibliothèques nécessaires à l'utilisation du GPU :
 
 ```bash
 python -m pip install --default-timeout=120 torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Les versions installées sont notamment :
+Les versions installées sont :
 
 ```text
-PyTorch : 2.5.1+cu121
-torchvision : 0.20.1+cu121
-torchaudio : 2.5.1+cu121
+PyTorch      2.5.1+cu121
+torchvision  0.20.1+cu121
+torchaudio   2.5.1+cu121
 ```
+
+Ces versions utilisent les bibliothèques CUDA 12.1 fournies avec les wheels PyTorch.
 
 ### Vérification du GPU
 
-J'ai créé le script `check_gpu.py` suivant :
+Un script `check_gpu.py` a été utilisé afin de vérifier que PyTorch détecte correctement le GPU.
 
-```python
-import torch
-
-print("PyTorch version:", torch.__version__)
-
-gpu_available = torch.cuda.is_available()
-print("CUDA available:", gpu_available)
-
-if gpu_available:
-    print("Device count:", torch.cuda.device_count())
-    print("Device 0 name:", torch.cuda.get_device_name(0))
-else:
-    print("Attention, aucun GPU détecté !")
-```
-
-Le script a été exécuté avec :
-
-```bash
-python check_gpu.py
-```
-
-Le résultat obtenu est :
+Le test a confirmé que CUDA est disponible :
 
 ```text
-PyTorch version: 2.5.1+cu121
 CUDA available: True
-Device count: 1
-Device 0 name: NVIDIA L4
 ```
 
-CUDA est donc correctement détecté par PyTorch et un GPU **NVIDIA L4** est accessible depuis l'environnement.
+Le GPU détecté est :
 
-Si `torch.cuda.is_available()` avait retourné `False`, deux causes possibles auraient été l'absence de GPU correctement alloué au job SLURM ou une installation de PyTorch ne disposant pas du support CUDA.
+```text
+NVIDIA L4
+```
+
+PyTorch est donc capable d'effectuer les calculs sur le GPU alloué par SLURM.
 
 ### Reproductibilité de l'environnement
 
-Afin de conserver les dépendances de l'environnement, j'ai généré le fichier `environment.yml` avec :
+Un fichier `environment.yml` a été créé afin de décrire l'environnement Python utilisé pour le TP.
 
-```bash
-mamba env export --from-history -n deeplearning > environment.yml
-```
-
-Ce fichier est présent dans le dépôt du TP afin de permettre de reproduire l'environnement.
+Ce fichier permet de conserver les informations nécessaires à la reconstruction de l'environnement et facilite ainsi la reproductibilité des expériences.
 
 ### TensorBoard
 
-TensorBoard a également été installé dans l'environnement `deeplearning`.
+TensorBoard a également été installé dans l'environnement.
 
-La version installée est :
+La version utilisée est :
 
 ```text
-2.20.0
+TensorBoard 2.20.0
 ```
 
-La vérification a été effectuée avec :
+La version de `setuptools` a été maintenue sous la version 81 afin d'assurer la compatibilité avec les dépendances utilisées :
 
-```bash
-tensorboard --version
+```text
+setuptools 80.10.2
 ```
-
-TensorBoard fonctionne correctement dans l'environnement, avec un avertissement concernant l'utilisation de `pkg_resources` qui n'empêche pas son exécution.
 
 ## 3. Exercices théoriques
 
@@ -223,13 +177,13 @@ TensorBoard fonctionne correctement dans l'environnement, avec un avertissement 
 
 #### Architecture du MLP
 
-Le modèle comporte :
+On considère un perceptron multicouche composé de :
 
-- une couche d'entrée de **3 neurones** ;
-- une couche cachée de **4 neurones** ;
-- une couche de sortie de **2 neurones**.
+- **3 neurones d'entrée** ;
+- **4 neurones dans la couche cachée** ;
+- **2 neurones de sortie**.
 
-Le schéma de l'architecture est le suivant :
+Le schéma correspondant est :
 
 ![Architecture du MLP](schema_mlp.png)
 
@@ -239,87 +193,59 @@ Chaque neurone d'une couche est connecté à tous les neurones de la couche suiv
 
 Pour la première couche :
 
-$$
-3 \times 4 = 12
-$$
+`3 × 4 = 12`
 
 Pour la deuxième couche :
 
-$$
-4 \times 2 = 8
-$$
+`4 × 2 = 8`
 
 Donc :
 
-$$
-12 + 8 = \boxed{20}
-$$
+`12 + 8 = 20`
 
 paramètres sans les biais.
 
 **Nombre de paramètres avec les biais :**
 
-La couche cachée possède 4 biais :
+La couche cachée possède 4 biais et la couche de sortie possède 2 biais.
 
-$$
-4
-$$
+Le nombre total de paramètres est donc :
 
-La couche de sortie possède 2 biais :
-
-$$
-2
-$$
-
-Donc le nombre total de paramètres est :
-
-$$
-20 + 4 + 2 = \boxed{26}
-$$
+`20 + 4 + 2 = 26`
 
 Ainsi, le modèle possède **20 paramètres sans biais** et **26 paramètres avec biais**.
 
 ### Équations et dimensions
 
-Pour un batch de taille $N$, l'entrée est :
-
-$$
-X \in \mathbb{R}^{N \times 3}
-$$
+Pour un batch de taille N, l'entrée X a pour dimension `(N, 3)`.
 
 Le forward pass est :
 
-$$
-H = \operatorname{ReLU}(X \cdot W_1^T + b_1)
-$$
+`H = ReLU(X × W₁ᵀ + b₁)`
 
-$$
-Y = H \cdot W_2^T + b_2
-$$
+puis :
+
+`Y = H × W₂ᵀ + b₂`
 
 Les dimensions sont :
 
 | Élément | Dimension |
 |---|---|
-| $X$ | $(N,3)$ |
-| $W_1$ | $(4,3)$ |
-| $b_1$ | $(1,4)$ → diffusé en $(N,4)$ |
-| $H$ | $(N,4)$ |
-| $W_2$ | $(2,4)$ |
-| $b_2$ | $(1,2)$ → diffusé en $(N,2)$ |
-| $Y$ | $(N,2)$ |
+| `X` | `(N, 3)` |
+| `W₁` | `(4, 3)` |
+| `b₁` | `(1, 4)` → diffusé en `(N, 4)` |
+| `H` | `(N, 4)` |
+| `W₂` | `(2, 4)` |
+| `b₂` | `(1, 2)` → diffusé en `(N, 2)` |
+| `Y` | `(N, 2)` |
 
 En effet :
 
-$$
-(N,3) \times (3,4) = (N,4)
-$$
+`(N, 3) × (3, 4) = (N, 4)`
 
 puis :
 
-$$
-(N,4) \times (4,2) = (N,2)
-$$
+`(N, 4) × (4, 2) = (N, 2)`
 
 ### Graphe de calcul et rétropropagation
 
@@ -327,15 +253,11 @@ $$
 
 On considère la fonction :
 
-$$
-f(x,y,z) = \frac{x}{y} + z
-$$
+`f(x, y, z) = x / y + z`
 
 On introduit le nœud intermédiaire :
 
-$$
-q = \frac{x}{y}
-$$
+`q = x / y`
 
 Le graphe de calcul est :
 
@@ -345,202 +267,117 @@ Le graphe de calcul est :
 
 Avec :
 
-$$
-x=2,\qquad y=4,\qquad z=0
-$$
+`x = 2, y = 4, z = 0`
 
 On calcule d'abord :
 
-$$
-q = \frac{x}{y} = \frac{2}{4} = 0.5
-$$
+`q = x / y = 2 / 4 = 0.5`
 
 Puis :
 
-$$
-f = q+z = 0.5+0 = \boxed{0.5}
-$$
+`f = q + z = 0.5 + 0 = 0.5`
 
-La valeur de la fonction est donc :
-
-$$
-\boxed{f=0.5}
-$$
+La valeur de la fonction est donc **f = 0.5**.
 
 #### Backpropagation
 
 On commence par :
 
-$$
-f=q+z
-$$
+`f = q + z`
 
 Donc :
 
-$$
-\frac{\partial f}{\partial q}=1
-$$
+`∂f/∂q = 1`
 
 et :
 
-$$
-\frac{\partial f}{\partial z}=1
-$$
+`∂f/∂z = 1`
 
 Pour :
 
-$$
-q=\frac{x}{y}
-$$
+`q = x / y`
 
 on a :
 
-$$
-\frac{\partial q}{\partial x}=\frac{1}{y}
-$$
+`∂q/∂x = 1 / y`
 
 et :
 
-$$
-\frac{\partial q}{\partial y}=-\frac{x}{y^2}
-$$
+`∂q/∂y = -x / y²`
 
 Par la règle de la chaîne :
 
-$$
-\frac{\partial f}{\partial x}
-=
-\frac{\partial f}{\partial q}
-\frac{\partial q}{\partial x}
-$$
+`∂f/∂x = (∂f/∂q) × (∂q/∂x)`
 
-Donc, au point $(2,4,0)$ :
+Donc, au point `(2, 4, 0)` :
 
-$$
-\frac{\partial f}{\partial x}
-=
-1\times\frac{1}{4}
-=
-\boxed{0.25}
-$$
+`∂f/∂x = 1 × (1 / 4) = 0.25`
 
-Pour $y$ :
+Pour y :
 
-$$
-\frac{\partial f}{\partial y}
-=
-\frac{\partial f}{\partial q}
-\frac{\partial q}{\partial y}
-$$
+`∂f/∂y = (∂f/∂q) × (∂q/∂y)`
 
-$$
-=
-1\times\left(-\frac{2}{4^2}\right)
-=
--\frac{2}{16}
-=
-\boxed{-0.125}
-$$
+Donc :
+
+`∂f/∂y = 1 × (-2 / 4²) = -2 / 16 = -0.125`
 
 Enfin :
 
-$$
-\frac{\partial f}{\partial z}
-=
-\boxed{1}
-$$
+`∂f/∂z = 1`
 
 Les gradients sont donc :
 
-$$
-\boxed{
-\frac{\partial f}{\partial x}=0.25,\qquad
-\frac{\partial f}{\partial y}=-0.125,\qquad
-\frac{\partial f}{\partial z}=1
-}
-$$
+- `∂f/∂x = 0.25`
+- `∂f/∂y = -0.125`
+- `∂f/∂z = 1`
 
 ### Mise à jour des poids
 
-On utilise une descente de gradient avec :
+On utilise une descente de gradient avec un taux d'apprentissage :
 
-$$
-\eta=1
-$$
+`η = 1`
 
 La règle de mise à jour est :
 
-$$
-x'=x-\eta\frac{\partial f}{\partial x}
-$$
+`x′ = x - η × ∂f/∂x`
 
-$$
-y'=y-\eta\frac{\partial f}{\partial y}
-$$
+`y′ = y - η × ∂f/∂y`
 
-$$
-z'=z-\eta\frac{\partial f}{\partial z}
-$$
+`z′ = z - η × ∂f/∂z`
 
-Pour $x$ :
+Pour x :
 
-$$
-x'=2-1(0.25)=\boxed{1.75}
-$$
+`x′ = 2 - 1 × 0.25 = 1.75`
 
-Pour $y$ :
+Pour y :
 
-$$
-y'=4-1(-0.125)=\boxed{4.125}
-$$
+`y′ = 4 - 1 × (-0.125) = 4.125`
 
-Pour $z$ :
+Pour z :
 
-$$
-z'=0-1(1)=\boxed{-1}
-$$
+`z′ = 0 - 1 × 1 = -1`
 
 On obtient donc :
 
-$$
-\boxed{x'=1.75,\qquad y'=4.125,\qquad z'=-1}
-$$
+`x′ = 1.75, y′ = 4.125, z′ = -1`
 
 La nouvelle valeur de la fonction est :
 
-$$
-f'=\frac{x'}{y'}+z'
-$$
+`f′ = x′ / y′ + z′`
 
-$$
-f'=\frac{1.75}{4.125}-1
-$$
+`f′ = 1.75 / 4.125 - 1`
 
-$$
-f'\approx0.4242-1
-$$
+`f′ ≈ 0.4242 - 1`
 
-$$
-\boxed{f'\approx-0.5758}
-$$
+`f′ ≈ -0.5758`
 
-La valeur initiale était :
+La valeur initiale était **f = 0.5**.
 
-$$
-f=0.5
-$$
-
-Après la mise à jour :
-
-$$
-f'\approx-0.5758
-$$
+Après la mise à jour, on obtient **f′ ≈ -0.5758**.
 
 On constate donc que :
 
-$$
--0.5758 < 0.5
-$$
+`-0.5758 < 0.5`
 
 La valeur de la fonction a bien **diminué**, comme attendu avec cette étape de descente de gradient.
 
@@ -556,7 +393,7 @@ Les mini-batchs offrent un compromis entre le coût de calcul d'un seul exemple 
 
 ## Association des fonctions de sortie et des fonctions de perte
 
-| Tâche | Fonction finale (Sortie) | Fonction de perte (Loss) |
+| Tâche | Fonction finale (sortie) | Fonction de perte |
 |---|---|---|
 | Classification binaire | **Sigmoïde** | **Binary Cross-Entropy (BCE)** |
 | Classification multi-classe | **Softmax** | **Cross-Entropy** |
@@ -567,3 +404,96 @@ Ainsi :
 1. Classification binaire → **Sigmoïde + Binary Cross-Entropy**
 2. Classification multi-classe → **Softmax + Cross-Entropy**
 3. Régression pure → **Identité + MSE**
+
+# Premier réseau de neurones avec PyTorch
+
+## Préparation des données
+
+Le jeu de données CIFAR-10 est chargé avec une taille de mini-batch de 32.
+
+### Rôle de `batch_size` et `shuffle`
+
+L'argument `batch_size` définit le nombre d'exemples traités simultanément avant le calcul d'une mise à jour des paramètres. Ici, chaque mini-batch contient 32 images.
+
+L'argument `shuffle` détermine si les données sont mélangées avant chaque époque. Pour l'entraînement, `shuffle=True` permet de présenter les exemples dans un ordre différent à chaque époque et évite que le modèle ne dépende de l'ordre des données.
+
+Pour l'ensemble de test, `shuffle=False` est utilisé car aucun apprentissage n'est effectué. Il n'est donc pas nécessaire de modifier l'ordre des exemples pour calculer les performances du modèle.
+
+## Implémentation du MLP
+
+Le réseau utilisé possède une couche d'entrée correspondant aux images CIFAR-10 de taille `32 × 32 × 3`, une couche cachée de 128 neurones avec une activation ReLU, et une couche de sortie de 10 neurones correspondant aux 10 classes.
+
+### Utilisation de `torch.flatten(x, 1)`
+
+Les images reçues par le réseau ont plusieurs dimensions : la dimension du batch, les trois canaux RGB, la hauteur et la largeur. Une couche linéaire attend cependant un vecteur de caractéristiques pour chaque exemple.
+
+`torch.flatten(x, 1)` transforme donc chaque image de taille `3 × 32 × 32` en un vecteur de **3072 valeurs**, tout en conservant la dimension du batch.
+
+### Pourquoi ne pas appliquer Softmax ?
+
+La dernière couche du réseau retourne directement les logits, sans appliquer Softmax.
+
+`nn.CrossEntropyLoss` attend directement ces logits et réalise en interne les opérations nécessaires au calcul de la Cross-Entropy. Ajouter un Softmax avant cette fonction de perte serait donc inutile et pourrait réduire la stabilité numérique du calcul.
+
+## Entraînement du modèle
+
+Le modèle a été entraîné pendant **10 époques** avec l'optimiseur SGD, un taux d'apprentissage de `0.01` et un momentum de `0.9`.
+
+L'entraînement a été exécuté via SLURM sur un GPU **NVIDIA L4**.
+
+Les résultats obtenus sont :
+
+| Époque | Loss | Accuracy |
+|---:|---:|---:|
+| 1 | 2.0883 | 0.3304 |
+| 2 | 2.1281 | 0.3560 |
+| 3 | 2.1288 | 0.3650 |
+| 4 | 2.0725 | 0.3836 |
+| 5 | 2.0766 | 0.3862 |
+| 6 | 2.0587 | 0.3939 |
+| 7 | 2.0087 | 0.4081 |
+| 8 | 2.0123 | 0.4098 |
+| 9 | 1.9616 | 0.4203 |
+| 10 | 1.9358 | 0.4262 |
+
+À la dernière époque, l'accuracy d'entraînement atteint donc environ **42.62 %**.
+
+### Différence entre `optimizer.zero_grad()` et `loss.backward()`
+
+`optimizer.zero_grad()` réinitialise les gradients des paramètres du modèle. Cette étape est nécessaire car PyTorch accumule les gradients par défaut.
+
+`loss.backward()` effectue la rétropropagation à partir de la fonction de perte et calcule les gradients de la perte par rapport aux paramètres du réseau.
+
+Ainsi, `zero_grad()` efface les gradients précédents tandis que `backward()` calcule les nouveaux gradients.
+
+## Évaluation sur l'ensemble de test
+
+Après l'entraînement, le modèle a été évalué sur l'ensemble de test CIFAR-10.
+
+La précision obtenue est :
+
+**Test accuracy = 0.389 = 38.9 %**
+
+### Utilisation de `torch.no_grad()`
+
+Lors de l'évaluation, aucune mise à jour des paramètres n'est effectuée. Le bloc `with torch.no_grad():` désactive donc le calcul et le stockage des gradients.
+
+Cela réduit l'utilisation de la mémoire, notamment la mémoire GPU, et diminue le coût de calcul pendant l'inférence.
+
+### Précision d'un classificateur aléatoire
+
+CIFAR-10 contient 10 classes. Un classificateur choisissant uniformément une classe de manière aléatoire aurait donc une précision moyenne d'environ :
+
+`1 / 10 = 0.1 = 10 %`
+
+La précision obtenue par notre modèle, **38.9 %**, est donc nettement supérieure à celle d'un classificateur aléatoire.
+
+## Sauvegarde du modèle
+
+Après l'évaluation, les paramètres entraînés du réseau ont été sauvegardés dans le fichier `mlp_model.pth` avec :
+
+```python
+torch.save(model.state_dict(), "mlp_model.pth")
+```
+
+Le fichier généré sur le cluster a une taille d'environ **1.5 Mo**.
