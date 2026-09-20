@@ -497,3 +497,51 @@ torch.save(model.state_dict(), "mlp_model.pth")
 ```
 
 Le fichier généré sur le cluster a une taille d'environ **1.5 Mo**.
+## 5. Utilisation de TensorBoard
+
+### 5.1 Organisation des expériences
+
+Afin de suivre les différentes expériences, les métriques d'entraînement sont enregistrées avec TensorBoard dans le répertoire `runs/`.
+
+Chaque exécution possède un nom contenant le modèle, les principaux hyperparamètres ainsi que la date et l'heure, par exemple :
+
+`MLP/bs32_lr0.001_20260920-105202`
+
+L'inclusion des hyperparamètres dans le nom permet d'identifier rapidement la configuration utilisée et de comparer les différentes expériences. L'ajout de la date et de l'heure garantit un nom unique pour chaque exécution, évite d'écraser les résultats précédents et facilite la traçabilité des expériences.
+
+Pour l'évaluation, 10 % du jeu d'entraînement CIFAR-10 sont réservés à la validation. La séparation est effectuée avec une graine fixe afin de conserver les mêmes ensembles d'entraînement et de validation entre les différentes expériences.
+
+### 5.2 Suivi des métriques
+
+Les métriques suivantes sont enregistrées dans TensorBoard :
+
+- `Loss/train_step` : loss d'un mini-batch, enregistrée toutes les 10 itérations ;
+- `Loss/train` : loss moyenne sur l'ensemble d'entraînement à chaque époque ;
+- `Loss/val` : loss moyenne sur l'ensemble de validation ;
+- `Accuracy/val` : accuracy sur l'ensemble de validation.
+
+Pour visualiser `Loss/train_step`, un facteur de lissage de **0,5** a été retenu. Sans lissage, les variations entre mini-batches rendent la courbe très bruitée. Un lissage de 0,5 permet de faire apparaître clairement la tendance générale tout en conservant une partie des variations locales.
+
+`Loss/train_step` est naturellement plus bruitée que `Loss/train` car chaque valeur correspond à un seul mini-batch. La composition et la difficulté des mini-batches varient au cours de l'entraînement. À l'inverse, `Loss/train` est calculée sur l'ensemble des mini-batches d'une époque, ce qui moyenne une grande partie de ces fluctuations.
+
+### 5.3 Comparaison des hyperparamètres
+
+Trois configurations ont été testées pendant 10 époques :
+
+| Configuration | Learning rate | Batch size | Meilleure accuracy de validation | Observation |
+|---|---:|---:|---:|---|
+| Run 1 | 0.01 | 32 | 39.1 % | Apprentissage instable, loss de validation élevée et fluctuante |
+| Run 2 | 0.001 | 32 | **51.5 %** | Apprentissage stable, meilleure performance de validation |
+| Run 3 | 0.1 | 128 | 9.6 % | Divergence de l'entraînement, losses à `NaN` |
+
+Avec `lr=0.01` et `batch_size=32`, la loss d'entraînement diminue globalement, mais la loss de validation reste élevée et fluctue fortement, autour de 2.1 à 2.3. La meilleure accuracy de validation observée est de 39.1 %.
+
+La configuration `lr=0.001` et `batch_size=32` présente un comportement nettement plus stable. La loss d'entraînement diminue régulièrement d'environ 1.68 à 1.11. La loss de validation diminue d'environ 1.60 puis se stabilise autour de 1.46. Cette configuration obtient la meilleure accuracy de validation parmi les trois expériences, avec **51.5 %** à la dixième époque.
+
+Avec `lr=0.1` et `batch_size=128`, les losses deviennent `NaN` dès la première époque et l'accuracy reste autour de 9.6 %, soit proche du niveau aléatoire pour un problème à 10 classes. Le learning rate est ici trop élevé et provoque une divergence de l'optimisation.
+
+### 5.4 Détection visuelle du surapprentissage
+
+Un surapprentissage peut être détecté lorsque la loss d'entraînement continue de diminuer alors que la loss de validation cesse de diminuer puis commence à augmenter. L'écart entre les deux courbes devient alors de plus en plus important.
+
+Pour la configuration `lr=0.001`, la loss d'entraînement continue à diminuer pendant les 10 époques alors que la loss de validation se stabilise progressivement autour de 1.46. On observe donc un écart croissant entre entraînement et validation, mais pas de hausse continue et marquée de la loss de validation sur les 10 époques. Il ne s'agit donc pas encore d'un surapprentissage prononcé sur la période observée.
