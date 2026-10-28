@@ -1,0 +1,15 @@
+# Model checkpoints
+*.pth
+*.pt
+
+# Training logs and TensorBoard events
+logs/
+runs/
+
+# Python temporary files
+__pycache__/
+*.pyc
+
+# Local environments
+.venv/
+.env
