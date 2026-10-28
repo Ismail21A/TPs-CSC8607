@@ -235,29 +235,31 @@ J'ai relevé les heures d'enregistrement des métriques TensorBoard pour trois �
 | 1 | 12:00:36 | — |
 | 2 | 12:24:14 | 23 min 38 s |
 | 3 | 12:48:03 | 23 min 49 s |
+| 4 | 13:11:53 | 23 min 50 s |
 
-La durée moyenne mesurée est donc de **23 min 43,5 s par époque**.
+La durée moyenne mesurée sur les trois intervalles est donc de **23 min 45,7 s par époque**.
 
 En supposant cette durée constante et sans early stopping, j'estime :
 
-- **50 époques : environ 19 h 46 min** ;
-- **100 époques : environ 39 h 34 min**.
+- **50 époques : environ 19 h 48 min** ;
+- **100 époques : environ 39 h 36 min**.
 
 Il s'agit d'une extrapolation, pas d'une durée réellement mesurée sur 100 époques. Le job Slurm étant limité à quatre heures, il ne pourra pas terminer les 50 époques prévues dans cette seule exécution.
 
 ### Évolution sur plusieurs époques et comparaison avec le sous-ensemble
 
-Voici les résultats des trois premières époques sur ImageNet complet :
+Voici les résultats des quatre premières époques sur ImageNet complet :
 
 | Époque | Train loss | Train accuracy | Val loss | Val accuracy |
 | --- | --- | --- | --- | --- |
 | 1 | 5,6029 | 5,05 % | 4,6406 | 12,32 % |
 | 2 | 4,6223 | 13,29 % | 3,9515 | 20,54 % |
 | 3 | 4,2044 | 18,47 % | 3,5999 | 25,74 % |
+| 4 | 3,9473 | 21,96 % | 3,3875 | 29,37 % |
 
-Les quatre métriques évoluent dans le bon sens : les losses diminuent et les accuracies augmentent, aussi bien en entraînement qu'en validation.
+Les quatre métriques évoluent dans le bon sens : entre la première et la quatrième époque, la loss d'entraînement passe de 5,6029 à 3,9473 et celle de validation de 4,6406 à 3,3875. L'accuracy atteint respectivement 21,96 % et 29,37 %.
 
-La différence avec l'expérience sur 20 000 images est importante. Sur le sous-ensemble, AlexNet atteignait seulement 1,30 % d'accuracy en validation après dix époques. Sur ImageNet complet, il atteint déjà 25,74 % après trois époques.
+La différence avec l'expérience sur 20 000 images est importante. Sur le sous-ensemble, AlexNet atteignait 1,30 % d'accuracy en validation après dix époques. Sur ImageNet complet, il atteint 29,37 % après quatre époques.
 
 Il faut toutefois garder en tête qu'une époque complète représente beaucoup plus d'images et de mises à jour qu'une époque sur le sous-ensemble. On ne peut donc pas attribuer cette différence uniquement à la taille des données.
 
