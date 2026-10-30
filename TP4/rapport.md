@@ -156,3 +156,35 @@ Pour un LSTM, `hidden_state` est un tuple `(h_n, c_n)` contenant deux tenseurs :
 Les deux tenseurs ont ici la forme `(1, 2, 512)`.
 
 Les tests confirment également que les deux modèles produisent des logits de forme `(2, 20, 95)` pour une entrée de deux séquences de vingt caractères.
+
+## Exercice 3 — Entraînement et comparaison des modèles
+
+### Protocole expérimental
+
+Nous avons entraîné trois modèles de prédiction du caractère suivant sur des partitions musicales au format ABC : un RNN sans gradient clipping, un RNN avec gradient clipping et un LSTM avec gradient clipping.
+
+Les expériences utilisent un sous-ensemble de 10 000 partitions pour l'entraînement, 2 162 partitions pour la validation, une longueur de séquence de 500 caractères, un batch size de 128, une dimension d'embedding de 256 et une taille d'état caché de 512. L'optimiseur utilisé est Adam avec un taux d'apprentissage de 0,001. Chaque modèle est entraîné pendant 15 époques, avec une patience de 5 époques pour l'early stopping.
+
+Le gradient clipping est réalisé par `clip_grad_norm_` avec une norme maximale de 1,0. Les entraînements ont été exécutés sur GPU via Slurm. Les métriques ont été enregistrées avec TensorBoard et le meilleur modèle de chaque expérience a été sauvegardé selon la perte de validation.
+
+### Résultats
+
+| Modèle | Clipping | Meilleure perte de validation | Accuracy de validation | Époque optimale |
+|---|---|---:|---:|---:|
+| RNN | Non | 0,7041 | 77,73 % | 14 |
+| RNN | Oui (1,0) | 0,6791 | 78,45 % | 15 |
+| LSTM | Oui (1,0) | **0,5658** | **81,59 %** | 14 |
+
+### Analyse
+
+Les trois modèles présentent une diminution globale de la perte d'entraînement et de validation, ce qui confirme le bon fonctionnement du processus d'apprentissage.
+
+Le RNN avec gradient clipping obtient une perte de validation légèrement inférieure à celle du RNN sans clipping. Cependant, les normes moyennes des gradients restent généralement inférieures au seuil de 1,0. Cette expérience ne permet donc pas, à elle seule, de conclure que le clipping est responsable de l'amélioration observée.
+
+Le LSTM obtient les meilleurs résultats, avec une perte de validation de 0,5658 contre 0,6791 pour le RNN avec clipping. Cette amélioration est cohérente avec la capacité du LSTM à gérer les dépendances temporelles grâce à ses mécanismes de portes et à son état mémoire.
+
+L'accuracy calculée inclut les caractères de remplissage (*padding*). Elle doit donc être interprétée avec prudence, car elle peut surestimer la performance sur les caractères musicaux réels.
+
+### Conclusion
+
+Sur les configurations testées, le LSTM avec gradient clipping constitue le meilleur modèle pour la prédiction du caractère suivant. Nous le retenons pour la génération de nouvelles partitions musicales dans l'exercice suivant.
