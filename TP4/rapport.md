@@ -58,3 +58,101 @@ De plus, une grande partie des positions correspondrait à des espaces ajoutés 
 
 Le choix de 500 caractères constitue donc un compromis entre conservation de l'information musicale, efficacité de calcul et qualité de l'apprentissage.
 
+## Exercice 2 — Dataset PyTorch auto-régressif et modélisation
+
+### Étape 1 — Création du MusicDataset
+
+Le `MusicDataset` transforme les partitions ABC en séquences d'indices numériques et prépare les données pour un apprentissage auto-régressif.
+
+Pour chaque séquence de 500 caractères, l'entrée `x` contient les 499 premiers caractères (`seq[:-1]`), tandis que la cible `y` contient les 499 derniers (`seq[1:]`). Le modèle apprend ainsi à prédire le caractère suivant à chaque pas de temps.
+
+Avec `SEQ_LENGTH = 500` et `BATCH_SIZE = 128`, les dimensions obtenues sont :
+
+- **x :** `torch.Size([128, 499])`
+- **y :** `torch.Size([128, 499])`
+
+Le type `torch.long` (`int64`) est nécessaire car les caractères sont représentés par des indices entiers utilisés par la couche `nn.Embedding`. Le type `torch.float32` ne convient pas pour indexer directement cette couche.
+
+Les tests réalisés sur un sous-ensemble de 10 000 partitions confirment les dimensions attendues et le décalage temporel correct entre les entrées et les cibles.
+
+### Étape 2 — Architecture récurrente : RNN vs LSTM
+
+**1. Calcul théorique du nombre de paramètres**
+
+On considère un vocabulaire de taille \(V=95\), une dimension d'embedding \(E=256\) et une dimension cachée \(H=512\).
+
+**Couche Embedding (identique pour les deux architectures)**
+
+\[
+P_{\text{embedding}} = V \times E = 95 \times 256 = 24\,320
+\]
+
+**RNN classique (Elman)**
+
+La couche `nn.RNN` possède une matrice entrée-état, une matrice état-état et deux vecteurs de biais :
+
+\[
+P_{\text{RNN}} = HE + H^2 + 2H
+\]
+
+\[
+= 512 \times 256 + 512^2 + 2 \times 512
+= 394\,240
+\]
+
+**LSTM**
+
+Le LSTM possède quatre ensembles de paramètres correspondant à la porte d'entrée, la porte d'oubli, la porte de sortie et la mise à jour candidate de la mémoire :
+
+\[
+P_{\text{LSTM}} = 4(HE + H^2 + 2H)
+\]
+
+\[
+=4 \times 394\,240 = 1\,576\,960
+\]
+
+Le bloc LSTM possède donc exactement quatre fois plus de paramètres que le bloc RNN classique, car chaque porte et la mise à jour candidate disposent de leurs propres poids et biais.
+
+**Couche linéaire de sortie**
+
+\[
+P_{\text{Linear}} = HV + V
+= 512 \times 95 + 95 = 48\,735
+\]
+
+**Nombre total de paramètres :**
+
+| Couche | RNN | LSTM |
+|---|---:|---:|
+| Embedding | 24 320 | 24 320 |
+| Récurrente | 394 240 | 1 576 960 |
+| Linear | 48 735 | 48 735 |
+| **Total** | **467 295** | **1 650 015** |
+
+Les valeurs calculées ont été vérifiées expérimentalement avec `count_parameters()` et correspondent exactement aux résultats obtenus avec PyTorch.
+
+**2. Pourquoi utiliser `nn.Embedding` plutôt qu'une projection linéaire d'un indice scalaire ?**
+
+Les indices des caractères sont des identifiants arbitraires et non des valeurs numériques représentant une grandeur.
+
+Une transformation linéaire appliquée directement à un indice scalaire imposerait une relation artificielle entre les caractères : deux indices proches seraient traités comme des valeurs proches, et les représentations seraient contraintes à une même direction affine.
+
+Au contraire, `nn.Embedding` apprend un vecteur indépendant pour chaque caractère. Cela permet au modèle de construire des représentations adaptées aux relations statistiques entre les caractères et aux structures musicales.
+
+**3. Différence entre les états cachés RNN et LSTM**
+
+Pour un RNN classique, `hidden_state` est un unique tenseur représentant l'état caché final :
+
+`(num_layers, batch_size, hidden_size)`
+
+Dans notre cas : `(1, 2, 512)`.
+
+Pour un LSTM, `hidden_state` est un tuple `(h_n, c_n)` contenant deux tenseurs :
+
+- `h_n` : état caché, utilisé pour produire les sorties et transmettre l'information au pas suivant.
+- `c_n` : état de cellule, représentant la mémoire interne qui permet de conserver des informations sur des dépendances temporelles plus longues.
+
+Les deux tenseurs ont ici la forme `(1, 2, 512)`.
+
+Les tests confirment également que les deux modèles produisent des logits de forme `(2, 20, 95)` pour une entrée de deux séquences de vingt caractères.
